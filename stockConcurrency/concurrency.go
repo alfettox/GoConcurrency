@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"sync"
+	"time"
+	"strings"
 )
 
 func main() {
@@ -11,41 +13,48 @@ func main() {
 
 	waitGroup.Add(2)
 
-	appleStock := 0   // Number of Apple stock options
-	amazonStock := 0  // Number of Amazon stock options
-
-	go func() {
-		defer waitGroup.Done() //execute later
-		trackStockOptions("Martin", "Apple", &appleStock, &mu)
-	}()
-
-	go func() {
-		defer waitGroup.Done()
-		trackStockOptions("Louise", "Amazon", &amazonStock, &mu)
-	}()
+	ericssonStock := 0 // Total Ericsson stocks
+	huaweiStock := 0   // Total Huawei stocks
 
 	stockNoteChannel := make(chan string)
 
+	// NBC's goroutine
 	go func() {
-		leaveNote("Martin", "I bought Apple stock options.", stockNoteChannel)
+		defer waitGroup.Done()
+		trackStockOptions("NBC", "Huawei", &huaweiStock, &mu, stockNoteChannel)
 	}()
-	leaveNote("Louise", "I bought Amazon stock options.", stockNoteChannel)
 
-	waitGroup.Wait()
-	fmt.Printf("Both workers have stock options:\nApple: %d options\nAmazon: %d options\n", appleStock, amazonStock)
+	// Morgan Stanley's goroutine
+	go func() {
+		defer waitGroup.Done()
+		trackStockOptions("Morgan Stanley", "Ericsson", &ericssonStock, &mu, stockNoteChannel)
+	}()
+
+	go func() {
+		waitGroup.Wait()
+		close(stockNoteChannel)
+	}()
+
+	fmt.Printf("%-20s %-20s %-10s\n", "Bank", "Company", "Stock Options")
+	fmt.Println(strings.Repeat("-", 50))
+
+	for message := range stockNoteChannel {
+		fmt.Println(message)
+	}
+
+	fmt.Println(strings.Repeat("-", 50))
+	fmt.Printf("%-20s %-20s %-10s\n", "Total", "Ericsson", "Huawei")
+	fmt.Println("_________________________________________________")
+	fmt.Printf("%-20s %-20d %-10d\n", "TOTAL STOCKS: ", ericssonStock, huaweiStock)
 }
 
-func trackStockOptions(workerName string, companyName string, stockOptions *int, mu *sync.Mutex) {
+func trackStockOptions(bankName string, companyName string, stockOptions *int, mu *sync.Mutex, channel chan string) {
 	for i := 1; i <= 10; i++ {
 		mu.Lock()
 		*stockOptions++
 		mu.Unlock()
-		fmt.Printf("%s: %s stock options: %d options\n", workerName, companyName, *stockOptions)
+		message := fmt.Sprintf("%-20s %-20s %-10d", bankName, companyName, *stockOptions)
+		time.Sleep(100 * time.Millisecond)
+		channel <- message
 	}
-}
-
-func leaveNote(workerName string, note string, channel chan string) {
-	note = workerName + ": " + note
-	channel <- note
-	fmt.Println(note)
 }
